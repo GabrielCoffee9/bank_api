@@ -8,4 +8,4 @@ const app = express()
 app.use(express.json())
 app.use(routes)
 
-app.listen(4242)
+app.listen(process.env.PORT || 4242)
