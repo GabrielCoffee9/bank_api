@@ -6,7 +6,6 @@ async function newTransaction(user_id, receive_user, sent_user, value, type, cod
     if (sent_user == undefined) {
         sent_user = ''
     }
-
     const sqlText =
         `INSERT INTO transaction_history 
             (   user_id,
@@ -39,7 +38,21 @@ async function newTransaction(user_id, receive_user, sent_user, value, type, cod
     }
 
 }
+async function getUserData(username) {
+    var sqlText =
+        `SELECT id, balance FROM users
+            WHERE
+            name = '${username}' `
 
+    try {
+        var [rows] = await conn.execute(sqlText)
+    }
+    catch (error) {
+        console.log(error.sqlMessage)
+        throw error
+    }
+    return [rows]
+}
 
 class UserController {
     async createUser(req, res) {
@@ -65,7 +78,7 @@ class UserController {
              (now) 
         )`
         try {
-            const results = await conn.execute(sqlText)
+            var results = await conn.execute(sqlText)
 
         } catch (error) {
             console.log(error.sqlMessage)
@@ -77,115 +90,114 @@ class UserController {
     }
 
     async Deposit(req, res) {
-        const { username, receive_user, value, type } = req.body
+        const { username, value, type } = req.body
 
-        if (username == undefined || receive_user == undefined || value == undefined || type == undefined) {
-            console.log(username, receive_user, value, type)
+        if (username == undefined || value == undefined || type == undefined) {
             res.status(400).json({ error: "Some of the values in body is wrong" })
             throw error
         }
-
 
         if (value < 0) {
             res.status(400).json({ error: "value should be positive for operation deposit" })
             throw error
         }
-        var sqlText =
-            `SELECT id FROM users
-            WHERE
-            name = '${username}' `
 
         try {
-            var results = await conn.execute(sqlText)
-        }
-        catch (error) {
+            var data = await getUserData(username)
+
+        } catch (error) {
             console.log(error.sqlMessage)
             throw error
         }
-        const user_results = results[0][0]
 
-        sqlText =
+        const userid = data[0][0].id
+
+        const sqlText =
             `UPDATE
                 users
              SET
                 balance = balance + ${value},
                 updated_at = NOW()
              WHERE
-                id = ${user_results.id}`
+                id = ${userid}`
 
-        console.log(sqlText)
         try {
             await conn.execute(sqlText)
-            await newTransaction(user_results.id, receive_user, undefined, value, 'deposit', '')
+            await newTransaction(userid, username, undefined, value, 'deposit', '')
         }
         catch (error) {
             console.log(error.sqlMessage)
             throw error
         }
-        return res.json({ message: "Deposit successful" })
 
+        return res.json({ message: "Deposit successful" })
     }
 
     async Withdraw(req, res) {
         const { username, receive_user, value, type } = req.body
 
         if (username == undefined || receive_user == undefined || value == undefined || type == undefined) {
-            console.log(username, receive_user, value, type)
+
             res.status(400).json({ error: "Some of the values in body is wrong" })
             return
         }
 
-
         if (value > 0) {
             res.status(400).json({ error: "value should be negative for operation Withdraw" })
             return
-
         }
-        var sqlText =
-            `SELECT id, balance FROM users
-        WHERE
-        name = '${username}' `
 
         try {
-            var results = await conn.execute(sqlText)
-        }
-        catch (error) {
-            console.log(error.sqlMessage)
+            var data = await getUserData(username)
+
+        } catch (error) {
             throw error
+
         }
-        const user_results = results[0][0]
-        if (user_results.balance < (value * -1)) {
+
+        const balance = data[0][0].balance
+
+        if (balance < (value * -1)) {
             res.status(400).json({ error: "The value is more than the user have in the balance account" })
             return
         }
 
-        sqlText =
+        try {
+            var data = await getUserData(username)
+
+        } catch (error) {
+            console.log(error.sqlMessage)
+            throw error
+        }
+
+        const userid = data[0][0].id
+
+        var sqlText =
             `UPDATE
             users
          SET
             balance = balance - ${value * -1},
             updated_at = NOW()
          WHERE
-            id = ${user_results.id}`
+            id = ${userid}`
 
-        console.log(sqlText)
         try {
             await conn.execute(sqlText)
-            await newTransaction(user_results.id, receive_user, undefined, value, 'withdraw', '')
+            await newTransaction(userid, receive_user, undefined, value, 'withdraw', '')
         }
         catch (error) {
             console.log(error.sqlMessage)
             throw error
         }
-        return res.json({ message: "Withdraw successful" })
 
+        return res.json({ message: "Withdraw successful" })
     }
 
     async Payment(req, res) {
         const { username, receive_user, sent_user, value, type, code } = req.body
 
         if (username == undefined || receive_user == undefined || value == undefined || type == undefined || code == undefined) {
-            console.log(username, receive_user, value, type)
+
             res.status(400).json({ error: "Some of the values in body is wrong" })
             return
         }
@@ -196,20 +208,20 @@ class UserController {
             return
 
         }
-        var sqlText =
-            `SELECT id, balance FROM users
-        WHERE
-        name = '${username}' `
 
         try {
-            var results = await conn.execute(sqlText)
-        }
-        catch (error) {
+            var data = await getUserData(username)
+
+        } catch (error) {
             console.log(error.sqlMessage)
             throw error
         }
-        const user_results = results[0][0]
-        if (user_results.balance < (value * -1)) {
+
+        const balance = data[0][0].balance
+        const userid = data[0][0].id
+
+
+        if (balance < (value * -1)) {
             res.status(400).json({ error: "The value is more than the user have in the balance account" })
             return
         }
@@ -221,21 +233,115 @@ class UserController {
             balance = balance - ${value * -1},
             updated_at = NOW()
          WHERE
-            id = ${user_results.id}`
+            id = ${userid}`
 
-        console.log(sqlText)
         try {
             await conn.execute(sqlText)
-            await newTransaction(user_results.id, receive_user, sent_user, value, 'payment', code)
+            await newTransaction(userid, receive_user, sent_user, value, 'payment', code)
         }
         catch (error) {
             console.log(error.sqlMessage)
             throw error
         }
+
         return res.json({ message: "Payment successful" })
 
     }
 
+    async Transfer(req, res) {
+        const { receive_user, sent_user, value, type, mode } = req.body
+
+        if (receive_user == undefined || value == undefined || type == undefined || mode == undefined) {
+            res.status(400).json({ error: "Some of the values in body is wrong" })
+            return
+        }
+
+
+        if (mode == 'receiving') {
+
+            if (value < 0) {
+                res.status(400).json({ error: "value should be positive for operation Receiving Transfer" })
+                return
+
+            }
+
+            try {
+                var data = await getUserData(receive_user)
+
+            } catch (error) {
+                console.log(error.sqlMessage)
+                throw error
+            }
+
+            const userid = data[0][0].id
+
+            const sqlText =
+                `UPDATE
+                    users
+                SET
+                    balance = balance + ${value},
+                    updated_at = NOW()
+                 WHERE
+                    id = ${userid}`
+
+            try {
+                await conn.execute(sqlText)
+                await newTransaction(userid, receive_user, sent_user, value, 'transfer', '')
+            }
+            catch (error) {
+                console.log(error.sqlMessage)
+                throw error
+            }
+
+            return res.json({ message: "Transfer successful" })
+        }
+
+        if (mode == 'sending') {
+
+            if (value > 0) {
+                res.status(400).json({ error: "value should be negative for operation Sending Transfer" })
+                return
+
+            }
+
+            try {
+                var data = await getUserData(sent_user)
+
+            } catch (error) {
+                console.log(error.sqlMessage)
+                throw error
+            }
+
+            const balance = data[0][0].balance
+            const userid = data[0][0].id
+
+            if (balance < (value * -1)) {
+                res.status(400).json({ error: "The value is more than the user have in the balance account" })
+                return
+            }
+
+            const sqlText =
+                `UPDATE
+                    users
+                SET
+                    balance = balance - ${value * -1},
+                    updated_at = NOW()
+                WHERE
+                    id = ${userid}`
+
+            try {
+                await conn.execute(sqlText)
+                await newTransaction(userid, receive_user, sent_user, value, 'transfer', '')
+            }
+            catch (error) {
+                console.log(error.sqlMessage)
+                throw error
+            }
+
+            return res.json({ message: "Transfer successful" })
+        }
+    }
 }
+
 module.exports = new UserController()
 
