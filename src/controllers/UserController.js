@@ -38,6 +38,7 @@ async function newTransaction(user_id, receive_user, sent_user, value, type, cod
     }
 
 }
+
 async function getUserData(username) {
     var sqlText =
         `SELECT id, balance FROM users
@@ -51,7 +52,37 @@ async function getUserData(username) {
         console.log(error.sqlMessage)
         throw error
     }
+    const result = [rows]
+
+    if (result == false) {
+        var resulterror = 'Account not found'
+        return resulterror
+    }
     return [rows]
+}
+
+async function UserExists(username) {
+    var sqlText =
+        `SELECT id FROM users
+            WHERE
+            name = '${username}' `
+
+    var bExisting
+
+    try {
+        var [rows] = await conn.execute(sqlText)
+    }
+    catch (error) {
+        console.log(error.sqlMessage)
+        throw error
+    }
+    const result = [rows]
+
+    if (result == false) {
+        return bExisting = false
+    }
+
+    return bExisting = true
 }
 
 class UserController {
@@ -60,6 +91,19 @@ class UserController {
 
         if (username == undefined || value == undefined) {
             return res.status(400).json({ error: "Error has occured in the received values" })
+        }
+
+
+        try {
+            var bExisting = await UserExists(username)
+
+        } catch (error) {
+            console.log(error.sqlMessage)
+            throw error
+        }
+
+        if (bExisting == true) {
+            return res.status(400).json({ error: "That account already exists" })
         }
 
         const sqlText =
@@ -74,11 +118,11 @@ class UserController {
         (
             '${username}',
              ${value},
-             (now),
-             (now) 
+             now(),
+             now() 
         )`
         try {
-            var results = await conn.execute(sqlText)
+            await conn.execute(sqlText)
 
         } catch (error) {
             console.log(error.sqlMessage)
@@ -86,13 +130,13 @@ class UserController {
 
         }
 
-        return res.json(results)
+        return res.json({ message: "User created successfully" })
     }
 
     async Deposit(req, res) {
-        const { username, value, type } = req.body
+        const { username, value } = req.body
 
-        if (username == undefined || value == undefined || type == undefined) {
+        if (username == undefined || value == undefined) {
             res.status(400).json({ error: "Some of the values in body is wrong" })
             throw error
         }
@@ -108,6 +152,10 @@ class UserController {
         } catch (error) {
             console.log(error.sqlMessage)
             throw error
+        }
+
+        if (data == 'Account not found') {
+            return res.status(400).json({ error: "account not found" })
         }
 
         const userid = data[0][0].id
@@ -134,9 +182,9 @@ class UserController {
     }
 
     async Withdraw(req, res) {
-        const { username, receive_user, value, type } = req.body
+        const { username, receive_user, value } = req.body
 
-        if (username == undefined || receive_user == undefined || value == undefined || type == undefined) {
+        if (username == undefined || receive_user == undefined || value == undefined) {
 
             res.status(400).json({ error: "Some of the values in body is wrong" })
             return
@@ -155,19 +203,15 @@ class UserController {
 
         }
 
+        if (data == 'Account not found') {
+            return res.status(400).json({ error: "Account not found" })
+        }
+
         const balance = data[0][0].balance
 
         if (balance < (value * -1)) {
             res.status(400).json({ error: "The value is more than the user have in the balance account" })
             return
-        }
-
-        try {
-            var data = await getUserData(username)
-
-        } catch (error) {
-            console.log(error.sqlMessage)
-            throw error
         }
 
         const userid = data[0][0].id
@@ -194,9 +238,9 @@ class UserController {
     }
 
     async Payment(req, res) {
-        const { username, receive_user, sent_user, value, type, code } = req.body
+        const { username, receive_user, sent_user, value, code } = req.body
 
-        if (username == undefined || receive_user == undefined || value == undefined || type == undefined || code == undefined) {
+        if (username == undefined || receive_user == undefined || value == undefined || code == undefined) {
 
             res.status(400).json({ error: "Some of the values in body is wrong" })
             return
@@ -215,6 +259,10 @@ class UserController {
         } catch (error) {
             console.log(error.sqlMessage)
             throw error
+        }
+
+        if (data == 'Account not found') {
+            return res.status(400).json({ error: "Account not found" })
         }
 
         const balance = data[0][0].balance
@@ -249,9 +297,9 @@ class UserController {
     }
 
     async Transfer(req, res) {
-        const { receive_user, sent_user, value, type, mode } = req.body
+        const { receive_user, sent_user, value, mode } = req.body
 
-        if (receive_user == undefined || value == undefined || type == undefined || mode == undefined) {
+        if (receive_user == undefined || value == undefined || mode == undefined) {
             res.status(400).json({ error: "Some of the values in body is wrong" })
             return
         }
@@ -271,6 +319,10 @@ class UserController {
             } catch (error) {
                 console.log(error.sqlMessage)
                 throw error
+            }
+
+            if (data == 'Account not found') {
+                return res.status(400).json({ error: "Account not found" })
             }
 
             const userid = data[0][0].id
@@ -312,6 +364,10 @@ class UserController {
                 throw error
             }
 
+            if (data == 'Account not found') {
+                return res.status(400).json({ error: "Account not found" })
+            }
+
             const balance = data[0][0].balance
             const userid = data[0][0].id
 
@@ -344,4 +400,3 @@ class UserController {
 }
 
 module.exports = new UserController()
-
