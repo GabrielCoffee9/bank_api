@@ -1,402 +1,104 @@
 
+const User = require('../models/User')
+const Transaction_history = require('../models/Transaction_history')
 const conn = require("../database/connection")
 
-async function newTransaction(user_id, receive_user, sent_user, value, type, code) {
-
-    if (sent_user == undefined) {
-        sent_user = ''
-    }
-    const sqlText =
-        `INSERT INTO transaction_history 
-            (   user_id,
-                receive_user,
-                sent_user,
-                value,
-                type,
-                created_at, 
-                updated_at,
-                code
-            ) 
-            VALUES 
-            (
-                ${user_id},
-                 '${receive_user}',
-                 '${sent_user}',
-                 ${value},
-                 '${type}',
-                 NOW(),
-                 NOW(),
-                 '${code}' 
-            )`
-
-    try {
-        await conn.execute(sqlText)
-    }
-    catch (error) {
-        console.log(error.sqlMessage)
-        throw error
-    }
-
-}
-
-async function getUserData(username) {
-    var sqlText =
-        `SELECT id, balance FROM users
-            WHERE
-            name = '${username}' `
-
-    try {
-        var [rows] = await conn.execute(sqlText)
-    }
-    catch (error) {
-        console.log(error.sqlMessage)
-        throw error
-    }
-    const result = [rows]
-
-    if (result == false) {
-        var resulterror = 'Account not found'
-        return resulterror
-    }
-    return [rows]
-}
-
-async function UserExists(username) {
-    var sqlText =
-        `SELECT id FROM users
-            WHERE
-            name = '${username}' `
-
-    var bExisting
-
-    try {
-        var [rows] = await conn.execute(sqlText)
-    }
-    catch (error) {
-        console.log(error.sqlMessage)
-        throw error
-    }
-    const result = [rows]
-
-    if (result == false) {
-        return bExisting = false
-    }
-
-    return bExisting = true
-}
-
 class UserController {
-    async createUser(req, res) {
-        const { username, value } = req.body
 
-        if (username == undefined || value == undefined) {
+    async createUser(request, response) {
+        const { username, bvalue } = request.body
+
+        if (username == undefined || bvalue == undefined) {
             return res.status(400).json({ error: "Error has occured in the received values" })
         }
 
+        var result = await getUserData(username)
 
-        try {
-            var bExisting = await UserExists(username)
-
-        } catch (error) {
-            console.log(error.sqlMessage)
-            throw error
+        if (result != undefined) {
+            return response.status(400).json({ error: "This username already exists" })
         }
 
-        if (bExisting == true) {
-            return res.status(400).json({ error: "That account already exists" })
-        }
+        await User.create({ name: username, balance: bvalue })
 
-        const sqlText =
-            `INSERT INTO users 
-        (
-            name,
-            balance,
-            created_at, 
-            updated_at
-        ) 
-        VALUES 
-        (
-            '${username}',
-             ${value},
-             now(),
-             now() 
-        )`
-        try {
-            await conn.execute(sqlText)
-
-        } catch (error) {
-            console.log(error.sqlMessage)
-            throw error
-
-        }
-
-        return res.json({ message: "User created successfully" })
+        return response.json({ "message": "User created successfully" })
     }
 
-    async Deposit(req, res) {
-        const { username, value } = req.body
+    async Deposit(request, response) {
+        const { username, value } = request.body
 
         if (username == undefined || value == undefined) {
-            res.status(400).json({ error: "Some of the values in body is wrong" })
+            response.status(400).json({ error: "Some of the values in body is wrong" })
             throw error
         }
 
         if (value < 0) {
-            res.status(400).json({ error: "value should be positive for operation deposit" })
+            response.status(400).json({ error: "value should be positive for operation deposit" })
             throw error
         }
 
-        try {
-            var data = await getUserData(username)
+        var data = await getUserData(username)
 
-        } catch (error) {
-            console.log(error.sqlMessage)
-            throw error
+        if (data == undefined) {
+            return response.status(400).json({ error: "account not found" })
         }
 
-        if (data == 'Account not found') {
-            return res.status(400).json({ error: "account not found" })
-        }
+        await User.increment({ balance: +value }, { where: { id: data.id } })
 
-        const userid = data[0][0].id
+        await newTransaction(data.id, username, undefined, value, 'deposit', '')
 
-        const sqlText =
-            `UPDATE
-                users
-             SET
-                balance = balance + ${value},
-                updated_at = NOW()
-             WHERE
-                id = ${userid}`
-
-        try {
-            await conn.execute(sqlText)
-            await newTransaction(userid, username, undefined, value, 'deposit', '')
-        }
-        catch (error) {
-            console.log(error.sqlMessage)
-            throw error
-        }
-
-        return res.json({ message: "Deposit successful" })
+        return response.json({ message: "Deposit successful" })
     }
 
-    async Withdraw(req, res) {
-        const { username, receive_user, value } = req.body
+    async Withdraw(request, response) {
+        const { username, receive_user, value } = request.body
 
         if (username == undefined || receive_user == undefined || value == undefined) {
-
-            res.status(400).json({ error: "Some of the values in body is wrong" })
-            return
+            return response.status(400).json({ error: "Some of the values in body is wrong" })
         }
 
         if (value > 0) {
-            res.status(400).json({ error: "value should be negative for operation Withdraw" })
-            return
+            return response.status(400).json({ error: "value should be negative for operation Withdraw" })
+        }
+        var data = await getUserData(username)
+
+        if (data == undefined) {
+            return response.status(400).json({ error: "Account not found" })
         }
 
-        try {
-            var data = await getUserData(username)
-
-        } catch (error) {
-            throw error
-
-        }
-
-        if (data == 'Account not found') {
-            return res.status(400).json({ error: "Account not found" })
-        }
-
-        const balance = data[0][0].balance
+        const balance = data.balance
 
         if (balance < (value * -1)) {
-            res.status(400).json({ error: "The value is more than the user have in the balance account" })
-            return
+            return response.status(400).json({ error: "The value is more than the user have in the balance account" })
         }
 
-        const userid = data[0][0].id
+        const userid = data.id
+        await User.increment({ balance: -(value * -1) }, { where: { id: data.id } })
 
-        var sqlText =
-            `UPDATE
-            users
-         SET
-            balance = balance - ${value * -1},
-            updated_at = NOW()
-         WHERE
-            id = ${userid}`
+        await newTransaction(userid, receive_user, undefined, value, 'withdraw', '')
 
-        try {
-            await conn.execute(sqlText)
-            await newTransaction(userid, receive_user, undefined, value, 'withdraw', '')
-        }
-        catch (error) {
-            console.log(error.sqlMessage)
-            throw error
-        }
-
-        return res.json({ message: "Withdraw successful" })
+        return response.json({ message: "Withdraw successful" })
     }
+}
 
-    async Payment(req, res) {
-        const { username, receive_user, sent_user, value, code } = req.body
+async function newTransaction(user_id, receive_user, sent_user, value, type, code) {
+    await Transaction_history.create({
+        user_id: user_id,
+        receive_user: receive_user,
+        sent_user: sent_user,
+        value: value,
+        type: type,
+        code: code
+    })
+}
 
-        if (username == undefined || receive_user == undefined || value == undefined || code == undefined) {
+async function getUserData(username) {
 
-            res.status(400).json({ error: "Some of the values in body is wrong" })
-            return
-        }
+    var [result] = await User.findAll({ where: { name: username } })
 
-
-        if (value > 0) {
-            res.status(400).json({ error: "value should be negative for operation Payment" })
-            return
-
-        }
-
-        try {
-            var data = await getUserData(username)
-
-        } catch (error) {
-            console.log(error.sqlMessage)
-            throw error
-        }
-
-        if (data == 'Account not found') {
-            return res.status(400).json({ error: "Account not found" })
-        }
-
-        const balance = data[0][0].balance
-        const userid = data[0][0].id
-
-
-        if (balance < (value * -1)) {
-            res.status(400).json({ error: "The value is more than the user have in the balance account" })
-            return
-        }
-
-        sqlText =
-            `UPDATE
-            users
-         SET
-            balance = balance - ${value * -1},
-            updated_at = NOW()
-         WHERE
-            id = ${userid}`
-
-        try {
-            await conn.execute(sqlText)
-            await newTransaction(userid, receive_user, sent_user, value, 'payment', code)
-        }
-        catch (error) {
-            console.log(error.sqlMessage)
-            throw error
-        }
-
-        return res.json({ message: "Payment successful" })
-
+    if (result != undefined) {
+        result = (result.get({ plain: true }))
     }
-
-    async Transfer(req, res) {
-        const { receive_user, sent_user, value, mode } = req.body
-
-        if (receive_user == undefined || value == undefined || mode == undefined) {
-            res.status(400).json({ error: "Some of the values in body is wrong" })
-            return
-        }
-
-
-        if (mode == 'receiving') {
-
-            if (value < 0) {
-                res.status(400).json({ error: "value should be positive for operation Receiving Transfer" })
-                return
-
-            }
-
-            try {
-                var data = await getUserData(receive_user)
-
-            } catch (error) {
-                console.log(error.sqlMessage)
-                throw error
-            }
-
-            if (data == 'Account not found') {
-                return res.status(400).json({ error: "Account not found" })
-            }
-
-            const userid = data[0][0].id
-
-            const sqlText =
-                `UPDATE
-                    users
-                SET
-                    balance = balance + ${value},
-                    updated_at = NOW()
-                 WHERE
-                    id = ${userid}`
-
-            try {
-                await conn.execute(sqlText)
-                await newTransaction(userid, receive_user, sent_user, value, 'transfer', '')
-            }
-            catch (error) {
-                console.log(error.sqlMessage)
-                throw error
-            }
-
-            return res.json({ message: "Transfer successful" })
-        }
-
-        if (mode == 'sending') {
-
-            if (value > 0) {
-                res.status(400).json({ error: "value should be negative for operation Sending Transfer" })
-                return
-
-            }
-
-            try {
-                var data = await getUserData(sent_user)
-
-            } catch (error) {
-                console.log(error.sqlMessage)
-                throw error
-            }
-
-            if (data == 'Account not found') {
-                return res.status(400).json({ error: "Account not found" })
-            }
-
-            const balance = data[0][0].balance
-            const userid = data[0][0].id
-
-            if (balance < (value * -1)) {
-                res.status(400).json({ error: "The value is more than the user have in the balance account" })
-                return
-            }
-
-            const sqlText =
-                `UPDATE
-                    users
-                SET
-                    balance = balance - ${value * -1},
-                    updated_at = NOW()
-                WHERE
-                    id = ${userid}`
-
-            try {
-                await conn.execute(sqlText)
-                await newTransaction(userid, receive_user, sent_user, value, 'transfer', '')
-            }
-            catch (error) {
-                console.log(error.sqlMessage)
-                throw error
-            }
-
-            return res.json({ message: "Transfer successful" })
-        }
-    }
+    return result
 }
 
 module.exports = new UserController()
