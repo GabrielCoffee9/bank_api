@@ -10,8 +10,7 @@ routes.get('/', (req, res) => {
 routes.post('/createUser', UserController.createUser)
 routes.post('/deposit', UserController.Deposit)
 routes.post('/withdraw', UserController.Withdraw)
-// routes.post('/payment', UserController.Payment)
-// routes.post('/transfer', UserController.Transfer)
-
+routes.post('/payment', UserController.Payment)
+routes.post('/transfer', UserController.Transfer)
 
 module.exports = routes

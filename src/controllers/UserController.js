@@ -59,6 +59,7 @@ class UserController {
         if (value > 0) {
             return response.status(400).json({ error: "value should be negative for operation Withdraw" })
         }
+
         var data = await getUserData(username)
 
         if (data == undefined) {
@@ -72,11 +73,105 @@ class UserController {
         }
 
         const userid = data.id
+
         await User.increment({ balance: -(value * -1) }, { where: { id: data.id } })
 
         await newTransaction(userid, receive_user, undefined, value, 'withdraw', '')
 
         return response.json({ message: "Withdraw successful" })
+    }
+
+    async Payment(request, response) {
+        const { username, receive_user, sent_user, value, mode, code } = request.body
+
+        if (username == undefined || receive_user == undefined || sent_user == undefined || value == undefined || mode == undefined || code == undefined) {
+            return response.status(400).json({ error: "Some of the values in body is wrong" })
+        }
+
+        if (mode == 'receiving') {
+            if (value < 0) {
+                return response.status(400).json({ error: "value should be positive for operation Receiving Payment" })
+            }
+
+            var data = await getUserData(receive_user)
+        }
+
+        if (mode == 'sending') {
+            if (value > 0) {
+                return response.status(400).json({ error: "value should be negative for operation Sending Payment" })
+            }
+
+            var data = await getUserData(sent_user)
+
+            if (data.balance < (value * -1)) {
+                return response.status(400).json({ error: "The value is more than the user have in the balance account" })
+            }
+        }
+
+        if (data == undefined) {
+            return response.status(400).json({ error: "Account not found" })
+        }
+
+        const userid = data.id
+
+        if (mode == 'receiving') {
+            await User.increment({ balance: +value }, { where: { id: userid } })
+        }
+
+        if (mode == 'sending') {
+            await User.increment({ balance: -(value * -1) }, { where: { id: userid } })
+        }
+
+        await newTransaction(userid, receive_user, sent_user, value, 'payment', code)
+
+        return response.json({ message: "Payment successful" })
+    }
+
+    async Transfer(request, response) {
+        const { receive_user, sent_user, value, mode } = request.body
+
+        if (receive_user == undefined || value == undefined || mode == undefined) {
+            return response.status(400).json({ error: "Some of the values in body is wrong" })
+        }
+
+        if (mode == 'receiving') {
+            if (value < 0) {
+                return response.status(400).json({ error: "value should be positive for operation Receiving Transfer" })
+            }
+
+            var data = await getUserData(receive_user)
+        }
+
+        if (mode == 'sending') {
+
+            if (value > 0) {
+                return response.status(400).json({ error: "value should be negative for operation Sending Transfer" })
+            }
+
+            var data = await getUserData(sent_user)
+
+            if (data.balance < (value * -1)) {
+                return response.status(400).json({ error: "The value is more than the user have in the balance account" })
+            }
+        }
+
+        if (data == undefined) {
+            return response.status(400).json({ error: "Account not found" })
+        }
+
+        const userid = data.id
+
+        if (mode == 'receiving') {
+            await User.increment({ balance: +value }, { where: { id: userid } })
+        }
+
+        if (mode == 'sending') {
+            await User.increment({ balance: -(value * -1) }, { where: { id: userid } })
+        }
+
+        await newTransaction(userid, receive_user, sent_user, value, 'transfer', '')
+
+        return response.json({ message: "Transfer successful" })
     }
 }
 
